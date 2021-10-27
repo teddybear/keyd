@@ -51,6 +51,8 @@
 #define IS_MOUSE_BTN(code) (((code) >= BTN_LEFT && (code) <= BTN_TASK) ||\
 			    ((code) >= BTN_0 && (code) <= BTN_9))
 #define MAX_KEYBOARDS 256
+#define TAPPING_TERM 200
+#define TAPPING_TERM_ENABLED
 
 #define dbg(fmt, ...) { if(debug) warn("%s:%d: "fmt, __FILE__, __LINE__, ## __VA_ARGS__); }
 
@@ -108,6 +110,18 @@ static uint64_t get_time()
 	struct timespec tv;
 	clock_gettime(CLOCK_MONOTONIC, &tv);
 	return (tv.tv_sec*1E9)+tv.tv_nsec;
+}
+
+static uint64_t get_taping_term(){
+	return TAPPING_TERM*1E6;
+}
+
+int in_tapping_term(uint64_t from){
+	#ifndef TAPPING_TERM_ENABLED
+		return 1;
+	#else
+		return (abs(get_time() - from) <= get_taping_term());
+	#endif
 }
 
 static int is_keyboard(struct udev_device *dev)
@@ -471,7 +485,30 @@ static void process_event(struct keyboard *kbd, struct input_event *ev)
 				goto keyseq_cleanup;
 			}
 		}
+		reify_layer_mods(kbd);
+		break;
+	case ACTION_TAP_HOLD:
+		keyseq = d->arg.keyseq;
+		layer = kbd->layers[d->arg2.layer];
 
+		if(pressed) {
+			layer->active = !layer->active;
+			layer->timestamp = get_time();
+		} else {
+			layer->active = !layer->active;
+
+			if(lastd == d && in_tapping_term(layer->timestamp)) { //If tapped
+				uint16_t key = keyseq & 0xFFFF;
+				mods |= keyseq >> 16;
+
+				setmods(mods);
+				send_key(key, 1);
+				send_key(key, 0);
+
+				last_keyseq_timestamp = get_time();
+				goto keyseq_cleanup;
+			}
+		}
 		reify_layer_mods(kbd);
 		break;
 	case ACTION_LAYOUT:

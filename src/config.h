@@ -47,6 +47,7 @@ enum action {
 	ACTION_LAYER,
 	ACTION_LAYER_TOGGLE,
 	ACTION_ONESHOT,
+	ACTION_TAP_HOLD,
 };
 
 struct key_descriptor
